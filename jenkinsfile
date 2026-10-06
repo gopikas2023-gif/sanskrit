@@ -1,0 +1,56 @@
+pipeline {
+    agent any
+
+    stages {
+
+        stage('Checkout SCM') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Checkout') {
+            steps {
+                bat 'echo Checking out Samskritam source code...'
+                bat 'git status'
+            }
+        }
+
+        stage('Verify Environment') {
+            steps {
+                bat 'echo Build Number: %BUILD_NUMBER%'
+                bat 'echo Branch: %BRANCH_NAME%'
+                bat 'docker --version'
+                bat 'docker info'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                bat 'docker build -t samskritam:%BUILD_NUMBER% -t samskritam:latest .'
+            }
+        }
+
+        stage('Smoke Test & Health Check') {
+            steps {
+                bat 'docker rm -f samskritam-test 2>nul || exit /b 0'
+                bat 'docker run -d --name samskritam-test -p 8080:80 samskritam:%BUILD_NUMBER%'
+                bat 'timeout /t 5 /nobreak >nul'
+                bat 'curl --fail http://localhost:8080/'
+                bat 'docker ps'
+            }
+        }
+
+        stage('Post Actions') {
+            steps {
+                bat 'docker images samskritam'
+            }
+        }
+    }
+
+    post {
+        always {
+            bat 'docker rm -f samskritam-test 2>nul || exit /b 0'
+        }
+    }
+}
